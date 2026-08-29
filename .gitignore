@@ -1,0 +1,42 @@
+# ===== 环境与密钥（绝不提交）=====
+.env
+API/secrets.csv
+*.pem
+*.key
+*.p12
+
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ===== Node / 前端 =====
+node_modules/
+frontend/dist/
+*.tsbuildinfo
+npm-debug.log*
+yarn-error.log*
+
+# ===== 构建产物 =====
+dist/
+build/
+*.exe
+
+# ===== 运行时日志与临时文件 =====
+*.log
+_*.txt
+_*.py
+tmp/
+temp/
+
+# ===== 编辑器 / 系统 =====
+.vscode/
+.idea/
+*.swp
+Thumbs.db
+.DS_Store
