@@ -316,7 +316,7 @@ def _ai_assign_subjects(md_path: str, content: str, title: str = '') -> list:
 
 @app.post('/api/note/index')
 def reindex_note(path: str = Query(...)):
-    """重新索引一篇笔记：基于 Neo4j content 生成嵌入向量 + AI 主题分配。
+    """重新索引一篇笔记：嵌入向量 + AI 主题分配 + 星级/类型/关键词评估。
 
     文本一律取自 Neo4j Note.content（唯一内容来源），不读 md 文件。
     """
@@ -325,7 +325,7 @@ def reindex_note(path: str = Query(...)):
     content = n.get('content') or ''
     if not content.strip():
         raise HTTPException(400, '笔记内容为空，请先写入内容再索引')
-    out = {'ok': True, 'embedded': False, 'subjects': []}
+    out = {'ok': True, 'embedded': False, 'subjects': [], 'fields': {}}
 
     from API import ai_ask  # noqa: PLC0415
     # 1) 嵌入向量
@@ -346,6 +346,18 @@ def reindex_note(path: str = Query(...)):
             out['subjects'] = subs
     except Exception as e:  # noqa: BLE001
         out['subjects_error'] = str(e)
+
+    # 3) 星级/类型/关键词评估（复用 ai_index_fields：qwen-plus 主 + gpt-4o 兜底）
+    try:
+        from ai_index_fields import ask_one as _fields_ask_one  # noqa: PLC0415
+        fields = _fields_ask_one(
+            ai_ask, n.get('title') or '', content, 'qwen-plus', 'gpt-4o', 8000)
+        if fields:
+            from ai_index_fields import apply_to_neo4j as _fields_apply  # noqa: PLC0415
+            _fields_apply(_kg(), md, fields)
+            out['fields'] = fields
+    except Exception as e:  # noqa: BLE001
+        out['fields_error'] = str(e)
     return out
 
 

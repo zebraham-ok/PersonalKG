@@ -36,6 +36,7 @@ temp/
 
 # ===== 编辑器 / 系统 =====
 .vscode/
+.codebuddy/
 .idea/
 *.swp
 Thumbs.db
