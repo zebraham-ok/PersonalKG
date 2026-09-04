@@ -95,35 +95,41 @@ export default function NoteView() {
   // 编辑态下 textarea 与预览区滚动联动
   useEffect(() => {
     const ta = textareaRef.current
-    const pv = previewRef.current
-    if (!ta || !pv || !editing) return
+    // 真正可滚动的是 .note-preview 内部的 .markdown-body（外层 overflow:hidden）
+    const pvBody = previewRef.current?.querySelector<HTMLElement>('.markdown-body')
+    if (!ta || !pvBody || !editing) return
 
     const onTaScroll = () => {
       if (isSyncing.current) return
       isSyncing.current = true
       const ratio = ta.scrollTop / (ta.scrollHeight - ta.clientHeight || 1)
-      pv.scrollTop = ratio * (pv.scrollHeight - pv.clientHeight || 1)
+      pvBody.scrollTop = ratio * (pvBody.scrollHeight - pvBody.clientHeight || 1)
       requestAnimationFrame(() => (isSyncing.current = false))
     }
     const onPvScroll = () => {
       if (isSyncing.current) return
       isSyncing.current = true
-      const ratio = pv.scrollTop / (pv.scrollHeight - pv.clientHeight || 1)
+      const ratio = pvBody.scrollTop / (pvBody.scrollHeight - pvBody.clientHeight || 1)
       ta.scrollTop = ratio * (ta.scrollHeight - ta.clientHeight || 1)
       requestAnimationFrame(() => (isSyncing.current = false))
     }
 
     ta.addEventListener('scroll', onTaScroll)
-    pv.addEventListener('scroll', onPvScroll)
+    pvBody.addEventListener('scroll', onPvScroll)
     return () => {
       ta.removeEventListener('scroll', onTaScroll)
-      pv.removeEventListener('scroll', onPvScroll)
+      pvBody.removeEventListener('scroll', onPvScroll)
     }
   }, [editing, current?.md_path])
 
-  // 保存后自动退出编辑态
-  const handleSave = async () => {
+  // 仅保存到 Neo4j，不退出编辑态（Ctrl+S 快捷保存）
+  const saveOnly = async () => {
     await saveCurrent()
+  }
+
+  // 保存并退出编辑态（「保存」按钮）
+  const handleSave = async () => {
+    await saveOnly()
     setEditing(false)
   }
 
@@ -386,8 +392,12 @@ export default function NoteView() {
         </div>
         <div className="toolbar-actions">
           {editing ? (
-            <button className="primary" onClick={() => void handleSave()}>
-              保存 (Ctrl+S)
+            <button
+              className="primary"
+              title="保存并退出编辑模式；Ctrl+S 可仅保存不退出"
+              onClick={() => void handleSave()}
+            >
+              保存并退出
             </button>
           ) : (
             <>
@@ -446,7 +456,7 @@ export default function NoteView() {
             onKeyDown={(e) => {
               if ((e.ctrlKey || e.metaKey) && e.key === 's') {
                 e.preventDefault()
-                void handleSave()
+                void saveOnly()
               }
             }}
             spellCheck={false}
