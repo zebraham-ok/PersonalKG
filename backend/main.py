@@ -402,6 +402,28 @@ def remove_note_subject(path: str = Query(...), subject: str = Query(...)):
     return {'ok': True, 'removed': subj, 'remaining': remaining, 'reindexed': reindexed}
 
 
+@app.post('/api/note/subject')
+def add_note_subject(path: str = Query(...), subject: str = Query(...)):
+    """给一篇笔记追加一个主题（不覆盖已有主题）。
+
+    与 set_note_subjects（重建）不同：此处仅 upsert Subject 并 MERGE 一条 ON 关系，
+    保留该笔记已有的其它主题；若主题已关联则幂等返回。
+    """
+    md = _norm_md(path)
+    n = _note_checked(md)
+    subj = subject.strip()
+    if not subj:
+        raise HTTPException(400, '主题名不能为空')
+    existing = n.get('subjects') or []
+    if subj in existing:
+        return {'ok': True, 'added': None, 'remaining': len(existing)}
+    _kg().upsert_subject(subj)
+    _kg()._tx(
+        "MATCH (n:Note {md_path: $md}), (s:Subject {name: $subj}) MERGE (n)-[:ON]->(s)",
+        md=md, subj=subj)
+    return {'ok': True, 'added': subj, 'remaining': len(existing) + 1}
+
+
 @app.get('/api/related')
 def related_notes(path: str = Query(...), limit: int = 10):
     md = _norm_md(path)
@@ -435,6 +457,29 @@ def related_resources(path: str = Query(...), limit: int = 6):
 def subjects():
     # 主题视图按总星级（该主题下所有 Note 的 stars 之和）从大到小排序
     return _kg().list_subjects_by_stars()
+
+
+@app.get('/api/subject-catalog')
+def subject_catalog():
+    """返回学科分类树（backend/data/subjects.json）中的全部名称，扁平化、去重。
+
+    供前端「添加主题」输入框做包含匹配；不含根节点「学科」。
+    """
+    subj_file = CODE_DIR / 'backend' / 'data' / 'subjects.json'
+    if not subj_file.is_file():
+        return []
+    data = json.loads(subj_file.read_text(encoding='utf-8'))
+    out: list = []
+
+    def walk(node, is_root=False):
+        name = (node or {}).get('name')
+        if name and not is_root:
+            out.append(name)
+        for child in (node or {}).get('children', []) or []:
+            walk(child, False)
+
+    walk(data, True)
+    return sorted(set(out))
 
 
 @app.get('/api/subject-counts')

@@ -711,6 +711,90 @@ textarea:focus {
   color: #fff;
 }
 
+/* 添加主题：输入框 + 下拉候选 */
+.subject-adder {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.subject-input {
+  font-size: 11px;
+  padding: 1px 6px;
+  border: 1px dashed var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-dim);
+  width: 76px;
+  outline: none;
+  transition: border-color 0.15s, width 0.15s;
+}
+
+.subject-input:focus {
+  border-color: var(--accent);
+  color: var(--text);
+  width: 130px;
+}
+
+.subject-input::placeholder {
+  color: var(--text-dim);
+  opacity: 0.7;
+}
+
+.subject-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 30;
+  min-width: 180px;
+  max-height: 220px;
+  overflow-y: auto;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.subject-option {
+  text-align: left;
+  font-size: 12px;
+  padding: 5px 8px;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.subject-option:hover {
+  background: var(--accent);
+  color: #fff;
+}
+
+.subject-option.new {
+  color: var(--accent);
+}
+
+.subject-option.new:hover {
+  color: #fff;
+}
+
+.subject-option.empty {
+  color: var(--text-dim);
+  cursor: default;
+}
+
+.subject-option.empty:hover {
+  background: transparent;
+  color: var(--text-dim);
+}
+
 /* ------------------------- 中栏 ------------------------- */
 .note-view {
   flex: 1;

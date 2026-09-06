@@ -40,6 +40,8 @@ interface KbState {
   /** 全量笔记（不受主题过滤影响，供 AI 回复《标题》链接匹配） */
   allNotes: NoteSummary[]
   subjects: string[]
+  /** 学科分类树扁平化列表（供添加主题时包含匹配） */
+  subjectCatalog: string[]
   subjectCounts: Record<string, number>
   subjectFilter: string | null
   tabs: KbTab[]
@@ -78,6 +80,7 @@ interface KbState {
   deleteCurrent: () => Promise<void>
   deleteSubject: (name: string, withContent: boolean) => Promise<DeleteSubjectResult>
   removeCurrentSubject: (subject: string) => Promise<void>
+  addCurrentSubject: (subject: string) => Promise<void>
   reindexCurrent: () => Promise<void>
   setCurrentContent: (content: string) => void
   renameCurrent: (title: string) => Promise<void>
@@ -103,6 +106,7 @@ export const useStore = create<KbState>((set, get) => ({
   notes: [],
   allNotes: [],
   subjects: [],
+  subjectCatalog: [],
   subjectCounts: {},
   subjectFilter: null,
   tabs: [],
@@ -128,14 +132,15 @@ export const useStore = create<KbState>((set, get) => ({
   indexing: false,
 
   init: async () => {
-    const [notes, subjects, subjectCounts, resources, stats] = await Promise.all([
+    const [notes, subjects, subjectCatalog, subjectCounts, resources, stats] = await Promise.all([
       api.notes(),
       api.subjects(),
+      api.subjectCatalog(),
       api.subjectCounts(),
       api.resources(),
       api.stats(),
     ])
-    set({ notes, allNotes: notes, subjects, subjectCounts, resources, stats })
+    set({ notes, allNotes: notes, subjects, subjectCatalog, subjectCounts, resources, stats })
   },
 
   loadSubjectCounts: async () => {
@@ -332,6 +337,23 @@ export const useStore = create<KbState>((set, get) => ({
         ? `已移除「${r.removed}」，并重新分配主题：${r.reindexed.join('、')}`
         : `已移除「${r.removed}」`,
     )
+    await get().loadNotes()
+    await get().loadSubjectCounts()
+    await get().loadSubjects()
+  },
+
+  addCurrentSubject: async (subject) => {
+    const { current, currentPath } = get()
+    if (!current || !currentPath) return
+    const name = subject.trim()
+    if (!name) return
+    // 已关联则直接返回，避免重复
+    if ((current.subjects || []).includes(name)) return
+    const r = await api.addNoteSubject(currentPath, name)
+    const nextSubjects = [...(current.subjects || [])]
+    if (r.added && !nextSubjects.includes(r.added)) nextSubjects.push(r.added)
+    set({ current: { ...current, subjects: nextSubjects } })
+    get().showToast(r.added ? `已添加主题「${r.added}」` : '主题已存在，未重复添加')
     await get().loadNotes()
     await get().loadSubjectCounts()
     await get().loadSubjects()

@@ -82,14 +82,14 @@ code/.env ──凭据──►  前端浏览器界面（http://localhost:5173 �
 
 在 `code/` 目录下使用 `kb.bat`（或 `python -X utf8 kb_ctl.py`）：
 
-| 命令 | 作用 |
-|------|------|
-| `kb.bat start` | 检查 Neo4j → 启动后端(8000) + 前端(5173)，已运行的端口自动跳过 |
-| `kb.bat stop` | 停止前后端进程 |
-| `kb.bat restart` | 先停后启 |
-| `kb.bat status` | 查看 Neo4j / 后端 / 前端在线状态与健康检查 |
-| `kb.bat prod` | 生产模式：仅启动后端(8000)，托管前端构建产物（需先 `npm run build`） |
-| `kb.bat open` | 用默认浏览器打开页面 |
+| 命令               | 作用                                                                  |
+| ------------------ | --------------------------------------------------------------------- |
+| `kb.bat start`   | 检查 Neo4j → 启动后端(8000) + 前端(5173)，已运行的端口自动跳过       |
+| `kb.bat stop`    | 停止前后端进程                                                        |
+| `kb.bat restart` | 先停后启                                                              |
+| `kb.bat status`  | 查看 Neo4j / 后端 / 前端在线状态与健康检查                            |
+| `kb.bat prod`    | 生产模式：仅启动后端(8000)，托管前端构建产物（需先`npm run build`） |
+| `kb.bat open`    | 用默认浏览器打开页面                                                  |
 
 启动成功后访问：
 
@@ -135,21 +135,21 @@ npm run build        :: 生成 dist/
 
 ## API 一览
 
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| GET | `/api/notes` | 笔记列表（可按 subject/limit 过滤） |
-| GET / PUT | `/api/note?path=` | 获取 / 保存单篇笔记（md_path 走 query 参数） |
-| GET | `/api/related?path=` | 语义相关笔记推荐 |
-| GET | `/api/related-resources?path=` | 与当前笔记相关的文献 |
-| POST | `/api/search` | 笔记 / 文献双模式语义搜索 |
-| GET | `/api/subjects` | 主题列表 |
-| GET | `/api/graph?path=` | 以笔记为中心的子图（图谱可视化） |
-| GET | `/api/resources` | 论文库列表 |
-| GET | `/api/resources/{zid}/pdf` | 文献 PDF（内嵌渲染） |
-| POST | `/api/resources/sync` | 触发 Zotero → Neo4j 同步 |
-| POST | `/api/chat` | AI 对话（带当前笔记上下文） |
-| GET | `/api/stats` | 库统计 |
-| GET | `/api/health` | 健康检查 |
+| 方法      | 路径                             | 说明                                         |
+| --------- | -------------------------------- | -------------------------------------------- |
+| GET       | `/api/notes`                   | 笔记列表（可按 subject/limit 过滤）          |
+| GET / PUT | `/api/note?path=`              | 获取 / 保存单篇笔记（md_path 走 query 参数） |
+| GET       | `/api/related?path=`           | 语义相关笔记推荐                             |
+| GET       | `/api/related-resources?path=` | 与当前笔记相关的文献                         |
+| POST      | `/api/search`                  | 笔记 / 文献双模式语义搜索                    |
+| GET       | `/api/subjects`                | 主题列表                                     |
+| GET       | `/api/graph?path=`             | 以笔记为中心的子图（图谱可视化）             |
+| GET       | `/api/resources`               | 论文库列表                                   |
+| GET       | `/api/resources/{zid}/pdf`     | 文献 PDF（内嵌渲染）                         |
+| POST      | `/api/resources/sync`          | 触发 Zotero → Neo4j 同步                    |
+| POST      | `/api/chat`                    | AI 对话（带当前笔记上下文）                  |
+| GET       | `/api/stats`                   | 库统计                                       |
+| GET       | `/api/health`                  | 健康检查                                     |
 
 ## 常见问题
 

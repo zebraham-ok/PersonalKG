@@ -68,6 +68,13 @@ export const api = {
       j<{ ok: boolean; removed: string; remaining: number; reindexed: string[] | null }>,
     ),
 
+  addNoteSubject: (path: string, subject: string) =>
+    fetch(`${API}/note/subject?${qs({ path, subject })}`, { method: 'POST' }).then(
+      j<{ ok: boolean; added: string | null; remaining: number }>,
+    ),
+
+  subjectCatalog: () => fetch(`${API}/subject-catalog`).then(j<string[]>),
+
   saveNote: (path: string, content: string, title?: string) =>
     fetch(`${API}/note?${qs({ path })}`, {
       method: 'PUT',

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { useStore } from '../stores/useStore'
 import { api } from '../services/api'
@@ -59,6 +59,104 @@ function Stars({ n }: { n: number | null }) {
   return <span className="stars">{'★'.repeat(n)}</span>
 }
 
+/** 添加主题：输入时从「已有主题 + 学科分类」做包含匹配给出候选，点击/回车添加 */
+function SubjectAdder({
+  existing,
+  catalog,
+  onAdd,
+}: {
+  existing: string[]
+  catalog: string[]
+  onAdd: (name: string) => void
+}) {
+  const [val, setVal] = useState('')
+  const [open, setOpen] = useState(false)
+  const wrapRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const onDocClick = (e: MouseEvent) => {
+      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onDocClick)
+    return () => document.removeEventListener('mousedown', onDocClick)
+  }, [open])
+
+  const query = val.trim()
+
+  // 候选池：学科分类 + 已有主题，去重
+  const pool = useMemo(() => {
+    const seen = new Set<string>()
+    const merged: string[] = []
+    for (const s of [...catalog, ...existing]) {
+      const t = s.trim()
+      if (!t || seen.has(t)) continue
+      seen.add(t)
+      merged.push(t)
+    }
+    return merged
+  }, [catalog, existing])
+
+  // 包含匹配，过滤掉已关联的主题
+  const matches = useMemo(() => {
+    if (!query) return []
+    const taken = new Set(existing)
+    return pool.filter((s) => !taken.has(s) && s.includes(query)).slice(0, 30)
+  }, [pool, query, existing])
+
+  const canAddNew = query && !pool.includes(query) && !existing.includes(query)
+
+  const commit = (name: string) => {
+    onAdd(name)
+    setVal('')
+    setOpen(false)
+  }
+
+  const showDropdown = open && query && (matches.length > 0 || canAddNew)
+
+  return (
+    <div className="subject-adder" ref={wrapRef}>
+      <input
+        className="subject-input"
+        value={val}
+        placeholder="+ 主题"
+        onChange={(e) => {
+          setVal(e.target.value)
+          setOpen(true)
+        }}
+        onFocus={() => setOpen(true)}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') {
+            setOpen(false)
+            setVal('')
+          } else if (e.key === 'Enter') {
+            e.preventDefault()
+            if (matches.length) commit(matches[0])
+            else if (canAddNew) commit(query)
+          }
+        }}
+      />
+      {showDropdown && (
+        <div className="subject-dropdown">
+          {matches.map((s) => (
+            <button key={s} className="subject-option" onClick={() => commit(s)}>
+              {s}
+            </button>
+          ))}
+          {canAddNew && (
+            <button className="subject-option new" onClick={() => commit(query)}>
+              + 添加「{query}」
+            </button>
+          )}
+          {matches.length === 0 && !canAddNew && (
+            <div className="subject-option empty">没有匹配项</div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function NoteView() {
   const {
     current,
@@ -69,7 +167,9 @@ export default function NoteView() {
     deleteCurrent,
     reindexCurrent,
     removeCurrentSubject,
+    addCurrentSubject,
     renameCurrent,
+    subjectCatalog,
   } = useStore()
   const [editing, setEditing] = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
@@ -386,6 +486,11 @@ export default function NoteView() {
                 </button>
               </span>
             ))}
+            <SubjectAdder
+              existing={current.subjects || []}
+              catalog={subjectCatalog || []}
+              onAdd={(n) => void addCurrentSubject(n)}
+            />
             <span>{current.word_count ?? 0} 字</span>
             {current.source_docx && <span className="tag">源: {current.source_docx}</span>}
           </div>

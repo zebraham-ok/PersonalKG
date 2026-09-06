@@ -16,7 +16,7 @@ interface CtxMenu {
 }
 
 export default function Sidebar() {
-  const [view, setView] = useState<'subjects' | 'similar' | 'recent'>('subjects')
+  const [view, setView] = useState<'subjects' | 'similar' | 'recent'>('recent')
   const [showSelector, setShowSelector] = useState(false)
   const [ctx, setCtx] = useState<CtxMenu | null>(null)
   const {
