@@ -4,6 +4,20 @@ import { useStore } from '../stores/useStore'
 import { api } from '../services/api'
 import MarkdownView from './MarkdownView'
 
+/** 「导出文档型 PDF」：离屏 iframe 的打印样式 —— 亮色、A4、页边距由 @page 声明 */
+const PRINT_PDF_CSS = `
+@page { size: A4 portrait; margin: 16mm 14mm; }
+html, body { height: auto !important; overflow: visible !important; margin: 0 !important; background: #ffffff !important; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif; }
+#print-root .markdown-body { overflow: visible !important; padding: 0 !important; background: #ffffff !important; color: #1f2328; }
+#print-root pre { background: #f6f8fa !important; color: #1f2328 !important; white-space: pre-wrap; word-break: break-word; }
+#print-root pre, #print-root blockquote, #print-root table, #print-root img { break-inside: avoid; page-break-inside: avoid; }
+#print-root h1, #print-root h2, #print-root h3, #print-root h4, #print-root h5, #print-root h6 { break-after: avoid; page-break-after: avoid; }
+#print-root img { max-width: 100%; }
+#print-root a { color: #0969da; text-decoration: none; }
+* { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+`
+
 function EditableTitle({ title }: { title: string }) {
   const { renameCurrent } = useStore()
   const [editing, setEditing] = useState(false)
@@ -462,6 +476,119 @@ export default function NoteView() {
     }
   }
 
+  /**
+   * 「导出文档型 PDF」：在隐藏 iframe 中渲染 Markdown（独立文档，不含左右侧栏），
+   * 调用浏览器打印引擎生成矢量文本 PDF（可选中/可搜索，页边距由 @page 声明）。
+   */
+  const onExportTextPdf = async () => {
+    if (!current) return
+    if (!(current.content ?? '').trim()) {
+      window.alert('笔记内容为空，无法导出 PDF')
+      return
+    }
+    let iframe: HTMLIFrameElement | null = null
+    let root: Root | null = null
+    let cleaned = false
+    const prevTitle = document.title
+    const cleanup = () => {
+      if (cleaned) return
+      cleaned = true
+      document.title = prevTitle // 恢复主页面标题
+      try {
+        root?.unmount()
+      } catch {
+        /* ignore */
+      }
+      iframe?.remove()
+    }
+    try {
+      iframe = document.createElement('iframe')
+      Object.assign(iframe.style, {
+        position: 'fixed',
+        top: '0',
+        left: '-100000px', // 移出视口：保留渲染能力，不干扰主界面
+        width: '794px',
+        height: '100vh',
+        border: 'none',
+        zIndex: '99999',
+        pointerEvents: 'none',
+        backgroundColor: '#ffffff',
+      } as Partial<CSSStyleDeclaration>)
+      iframe.setAttribute('aria-hidden', 'true')
+      document.body.appendChild(iframe)
+      const doc = iframe.contentDocument
+      const w = iframe.contentWindow
+      if (!doc || !w) throw new Error('无法创建打印页面')
+      doc.open()
+      doc.write(
+        '<!doctype html><html><head><meta charset="utf-8"></head>' +
+          '<body><div id="print-root"></div></body></html>'
+      )
+      doc.close()
+      doc.title = current.title || '笔记'
+      // 注入与主应用一致的样式（global.css 含 .markdown-body 全部规则与 CSS 变量；
+      // iframe 无 data-theme 属性 → 走 :root 默认亮色变量，白底黑字）
+      for (const el of document.querySelectorAll('style, link[rel="stylesheet"]')) {
+        doc.head.appendChild(el.cloneNode(true))
+      }
+      const printStyle = doc.createElement('style')
+      printStyle.textContent = PRINT_PDF_CSS
+      doc.head.appendChild(printStyle)
+      const host = doc.getElementById('print-root')
+      if (!host) throw new Error('打印页初始化失败')
+      root = createRoot(host)
+      root.render(<MarkdownView mdPath={current.md_path} content={current.content ?? ''} />)
+
+      // 等 React 渲染完成 + 图片加载完成（离屏 iframe 中 lazy 图片不会自行加载，强制 eager）
+      await new Promise<void>((resolve, reject) => {
+        let settled = false
+        const done = (err?: unknown) => {
+          if (!settled) {
+            settled = true
+            if (err) reject(err)
+            else resolve()
+          }
+        }
+        const check = () => {
+          const body = doc.querySelector<HTMLElement>('#print-root .markdown-body')
+          if (!body || body.children.length === 0) {
+            setTimeout(check, 100) // 渲染未完成，稍后重试
+            return
+          }
+          const imgs = Array.from(body.querySelectorAll<HTMLImageElement>('img'))
+          let pending = imgs.length
+          if (pending === 0) return done()
+          for (const img of imgs) {
+            img.loading = 'eager'
+            const onImg = () => {
+              pending -= 1
+              if (pending <= 0) done()
+            }
+            if (img.complete) onImg()
+            else {
+              img.onload = onImg
+              img.onerror = onImg
+            }
+          }
+        }
+        setTimeout(check, 300)
+        setTimeout(() => done(new Error('渲染超时（8s）')), 8000) // 兜底
+      })
+
+      // 打印对话框的标题/另存为默认文件名取自主窗口 document.title，
+      // 临时换成笔记标题，结束后由 cleanup 恢复
+      document.title = current.title || '笔记'
+      w.onafterprint = cleanup
+      w.focus()
+      w.print() // Chromium/Edge 阻塞到打印对话框关闭
+      // 关闭对话框后清除离屏资源（阻塞式返回；Safari 等由 onafterprint 兜底）
+      setTimeout(cleanup, 1500)
+    } catch (err) {
+      cleanup()
+      window.alert(`导出失败：${(err as Error).message}`)
+    }
+  }
+
   return (
     <div className="note-view">
       <div className="note-toolbar">
@@ -537,7 +664,16 @@ export default function NoteView() {
                         void onExportPdf()
                       }}
                     >
-                      导出 PDF
+                      导出 PDF（图片式）
+                    </button>
+                    <button
+                      onClick={() => {
+                        setExportOpen(false)
+                        void onExportTextPdf()
+                      }}
+                      title="弹系统打印对话框，选“另存为 PDF”；文字可选中、可搜索"
+                    >
+                      导出 PDF（文档型）
                     </button>
                   </div>
                 )}
