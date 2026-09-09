@@ -26,7 +26,7 @@ function loadOpt(key: string, def: boolean): boolean {
 }
 
 export default function ChatPanel() {
-  const { currentPath, chatMsgs, chatBusy, sendChat, clearChat } = useStore()
+  const { chatMsgs, chatBusy, sendChat, clearChat } = useStore()
   const [input, setInput] = useState('')
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null)
   const [model, setModel] = useState(() => {
@@ -60,7 +60,7 @@ export default function ChatPanel() {
 
   const send = async (raw?: string) => {
     const text = (raw ?? input).trim()
-    if (!text || !currentPath || chatBusy) return
+    if (!text || chatBusy) return
     const message = SHORTCUTS[text] ?? text
     setInput('')
     await sendChat(message, { model, useNote, usePdf, rag })

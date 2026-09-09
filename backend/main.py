@@ -105,7 +105,7 @@ class SearchBody(BaseModel):
 
 
 class ChatBody(BaseModel):
-    md_path: str
+    md_path: str = ''    # 当前笔记路径；未打开笔记（如纯 RAG / 自由提问）时为空
     message: str
     model: str = 'qwen-turbo'
     history: list = []           # [{"role": "user"|"assistant", "content": "..."}]
@@ -739,14 +739,19 @@ def _rag_context(message: str, topk: int = 5) -> str:
 
 @app.post('/api/chat')
 def chat(body: ChatBody):
-    md = _norm_md(body.md_path)
-    n = _note_checked(md)
+    n = None
+    if body.md_path:
+        # 打开笔记时的上下文；若笔记不存在（已被删除等）则忽略，不影响 RAG / 普通问答
+        try:
+            n = _note_checked(_norm_md(body.md_path))
+        except HTTPException:
+            n = None
     sys.path.insert(0, str(CODE_DIR))
     from API import ai_ask
 
     # ---- 上下文组装：按开关选择性注入 ----
     ctx = []
-    if body.use_note:
+    if body.use_note and n:
         head = (
             f"当前笔记：《{n.get('title') or ''}》\n"
             f"类型：{n.get('type') or '未知'} | 星级：{n.get('stars') or '-'} | "

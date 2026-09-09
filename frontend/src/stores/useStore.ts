@@ -424,14 +424,14 @@ export const useStore = create<KbState>((set, get) => ({
   sendChat: async (text, opts) => {
     const msg = text.trim()
     const { currentPath, currentResource, chatMsgs } = get()
-    if (!msg || !currentPath || get().chatBusy) return
+    if (!msg || get().chatBusy) return
     const next = [...chatMsgs, { role: 'user' as const, content: msg }]
     // 先插入占位空消息，随 SSE 流式逐步填充
     set({ chatMsgs: [...next, { role: 'assistant', content: '' }], chatBusy: true })
     const aIdx = next.length
     try {
       const full = await api.chatStream(
-        currentPath,
+        currentPath ?? '',
         msg,
         next,
         opts.model,
