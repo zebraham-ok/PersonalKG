@@ -94,7 +94,10 @@ def _note_checked(md_path: str):
 
 # ------------------------------------------------------------------- 请求体
 class SaveBody(BaseModel):
-    content: str
+    # content 缺省 = “不改正文”（例如只改标题，或这篇笔记本来还没正文）：
+    # 早期版本把它设为必填，导致历史遗留的“有元数据无正文”节点连重命名、
+    # 或未改动正文就点保存都会 422 静默失败（前端不发 undefined 字段）。
+    content: Optional[str] = None
     title: Optional[str] = None
 
 
@@ -126,6 +129,67 @@ class CreateNoteBody(BaseModel):
 
 
 # ------------------------------------------------------------------- 笔记
+def _count_chars(text: str) -> int:
+    """非空白字符数（与 md-index 的 word_count 口径一致）。"""
+    return len(re.sub(r'\s', '', text))
+
+
+_FRONTMATTER_MAX_LINES = 60   # frontmatter 超过这么多行就不再当它是 frontmatter
+_YAML_LINE_RE = re.compile(r'^(?:[A-Za-z_][\w.-]*[ \t]*:|[ \t]+\S|-[ \t]|\s*$)')
+
+
+def _strip_frontmatter(text: str) -> str:
+    """去掉 md 开头的 YAML frontmatter。
+
+    author/date 这类信息在节点元数据里已经有了，正文里重复插入没有意义。
+    只处理「位于文档最开头 + 每行形如 key: value / 列表 / 缩进续行 + 独立一行 --- 收尾」
+    的块：正文里的水平分割线不会被误删。
+    （与 md-index `neo4j_kg.strip_frontmatter` 同一套判定，改一处请同步另一处。）
+    """
+    if not text:
+        return text
+    lines = text.splitlines(keepends=True)
+    if not lines or lines[0].lstrip('\ufeff').strip() != '---':
+        return text
+    end = None
+    for i in range(1, min(len(lines), _FRONTMATTER_MAX_LINES)):
+        if lines[i].strip() == '---':
+            end = i
+            break
+        if not _YAML_LINE_RE.match(lines[i].rstrip('\r\n')):
+            return text          # 出现正文行 → 不是 frontmatter，原样返回
+    if end is None:
+        return text
+    return ''.join(lines[end + 1:]).lstrip('\r\n')
+
+
+def _import_content_from_disk(md: str, note: dict) -> Optional[int]:
+    """Neo4j 节点缺 content 时，从磁盘 md 载体回填正文（返回非空白字符数）。
+
+    只在 content 属性**缺失**（None）时触发：正文被用户清空成 '' 的笔记不覆盖。
+    只对已有节点做 MATCH + SET，不会新建节点、不会改 md_path。
+    不刷新 indexed_at（回填是补历史缺漏，不算用户编辑，避免打乱「近期编辑」排序）。
+    入库前剥掉 md 开头的 YAML frontmatter（元数据已在节点属性里）。
+    """
+    if note.get('content') is not None:
+        return None
+    src = Path(md)
+    if not src.is_file():
+        return None
+    try:
+        text = src.read_text(encoding='utf-8', errors='replace')
+    except OSError as e:
+        print(f'[回填] 读取 md 失败 {md}: {e}')
+        return None
+    text = _strip_frontmatter(text)
+    wc = _count_chars(text)
+    _kg()._tx(
+        "MATCH (n:Note {md_path: $md}) SET n.content = $c, n.word_count = $wc",
+        md=md, c=text, wc=wc)
+    print(f'[回填] {md}：{len(text)} 字符（非空白 {wc}）')
+    return wc
+
+
 @app.get('/api/notes')
 def list_notes(subject: Optional[str] = None, limit: Optional[int] = None):
     return _kg().list_notes(subject=subject, limit=limit)
@@ -134,17 +198,71 @@ def list_notes(subject: Optional[str] = None, limit: Optional[int] = None):
 @app.get('/api/note')
 def get_note(path: str = Query(...)):
     md = _norm_md(path)
-    return _note_checked(md)
+    n = _note_checked(md)
+    # 读时自愈：节点缺正文而磁盘 md 载体还在 → 就地回填，避免「显示字数、打开空白」
+    if _import_content_from_disk(md, n) is not None:
+        n = _note_checked(md)
+    return n
 
 
 @app.put('/api/note')
 def save_note(path: str = Query(...), body: SaveBody = None):
     md = _norm_md(path)
     _note_checked(md)
-    wc = len(body.content.replace('\n', '').replace('\r', ''))
+    if body is None:
+        body = SaveBody()
+    if body.content is None:
+        # 只改标题：不动 content/word_count（把“还没正文”的笔记写空会连字数一起清零）
+        if body.title is not None:
+            _kg()._tx("MATCH (n:Note {md_path: $md}) SET n.title = $t",
+                      md=md, t=str(body.title))
+        return {'ok': True, 'word_count': None}
+    # 字数口径与索引/回填统一：去空白字符数
+    wc = _count_chars(body.content)
     _kg().set_note_content(md, body.content, title=body.title, word_count=wc)
     # 2026-08-29 起：Neo4j 为唯一内容源，不再回写 Files/*.md（Files 仅保留 assets 图片）
     return {'ok': True, 'word_count': wc}
+
+
+@app.post('/api/notes/normalize-content')
+def normalize_content():
+    """规整全库笔记正文（幂等、可反复执行）：
+
+    1. 缺 content 的 Note：从磁盘 md 载体回填（读入时剥掉 YAML frontmatter）；
+    2. 正文开头残留 YAML frontmatter 的：剥离并重算 word_count
+       （author/date 等已在节点元数据里，正文里重复没有意义）。
+
+    只 MATCH 图谱中已存在的节点并 SET，不新建节点、不改 md_path，
+    因此不会产生重复节点。
+    """
+    rows = _kg()._tx(
+        "MATCH (n:Note) RETURN n.md_path AS md_path, n.content AS content")
+    healed, no_source, stripped = [], [], []
+    for r in rows:
+        md = _norm_md(r['md_path'])
+        if r['content'] is None:
+            if _import_content_from_disk(md, {}) is not None:
+                healed.append(md)
+            else:
+                no_source.append(md)   # 磁盘上没有 md 载体，无从回填
+            continue
+        clean = _strip_frontmatter(r['content'])
+        if clean != r['content']:
+            _kg()._tx(
+                "MATCH (n:Note {md_path: $md}) SET n.content = $c, n.word_count = $wc",
+                md=md, c=clean, wc=_count_chars(clean))
+            stripped.append(md)
+    left = _kg()._tx("MATCH (n:Note) WHERE n.content IS NULL RETURN count(n) AS c")
+    fm = _kg()._tx("MATCH (n:Note) WHERE n.content STARTS WITH '---' RETURN count(n) AS c")
+    return {
+        'ok': True,
+        'scanned': len(rows),
+        'backfilled': len(healed),
+        'frontmatter_stripped': len(stripped),
+        'no_source_file': no_source,
+        'still_missing': left[0]['c'] if left else 0,
+        'still_frontmatter': fm[0]['c'] if fm else 0,
+    }
 
 
 def _unique_md_path(title: str) -> str:

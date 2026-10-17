@@ -102,18 +102,21 @@ button.danger:hover {
   flex: none;
 }
 
-/* ---------------- 导出下拉菜单 ---------------- */
-.export-menu-wrap {
+/* ---------------- 导出下拉菜单 / 搜索范围下拉 ---------------- */
+.export-menu-wrap,
+.scope-menu-wrap {
   position: relative;
 }
 
-.export-menu-wrap button.active {
+.export-menu-wrap button.active,
+.scope-menu-wrap button.active {
   border-color: var(--accent);
   color: var(--accent);
   background: var(--bg);
 }
 
-.export-menu {
+.export-menu,
+.scope-menu {
   position: absolute;
   top: calc(100% + 4px);
   right: 0;
@@ -129,7 +132,8 @@ button.danger:hover {
   gap: 2px;
 }
 
-.export-menu button {
+.export-menu button,
+.scope-menu button {
   width: 100%;
   text-align: left;
   border: none;
@@ -139,10 +143,24 @@ button.danger:hover {
   font-size: 13px;
 }
 
-.export-menu button:hover {
+.export-menu button:hover,
+.scope-menu button:hover {
   background: var(--bg);
   color: var(--accent);
   border: none;
+}
+
+.scope-menu button.active {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* 搜索框内的小三角（切换搜索范围，平时收起） */
+.search-box .scope-caret {
+  flex: none;
+  padding: 5px 8px;
+  font-size: 11px;
+  line-height: 1;
 }
 
 /* ---------------- 模态框 ---------------- */
@@ -1400,6 +1418,83 @@ textarea:focus {
   align-items: center;
   justify-content: center;
   color: var(--text-dim);
+}
+
+/* 「中心显示」：PDF 换到中间大区域 */
+.center-pdf {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-panel);
+}
+
+.center-pdf iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+}
+
+.center-pdf .no-pdf {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-dim);
+}
+
+/* 「中心显示」：笔记落到左栏下部（窄栏）时的紧凑排版 */
+.resource-pdf.holds-note {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.resource-pdf.holds-note .note-toolbar {
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 10px;
+}
+
+.resource-pdf.holds-note .note-toolbar h2 {
+  font-size: 15px;
+}
+
+.resource-pdf.holds-note .toolbar-actions {
+  flex-wrap: wrap;
+}
+
+.resource-pdf.holds-note .markdown-body {
+  padding: 12px 14px 24px;
+  font-size: 13.5px;
+}
+
+/* 「相关论文 / PDF」页签右侧的 PDF/笔记互换按钮（固定在 tab 行，不随列表滚动） */
+.swap-btn {
+  flex: none;
+  margin-left: auto;
+  align-self: center;
+  padding: 2px 9px;
+  font-size: 11px;
+  line-height: 1.6;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--bg-panel);
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+.swap-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.swap-btn.active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
 }
 
 .resource-meta {

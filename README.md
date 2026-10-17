@@ -139,6 +139,7 @@ npm run build        :: 生成 dist/
 | --------- | -------------------------------- | -------------------------------------------- |
 | GET       | `/api/notes`                   | 笔记列表（可按 subject/limit 过滤）          |
 | GET / PUT | `/api/note?path=`              | 获取 / 保存单篇笔记（md_path 走 query 参数） |
+| POST      | `/api/notes/normalize-content` | 正文规整：缺正文回填 + 剥离 YAML frontmatter（幂等，不新建节点） |
 | GET       | `/api/related?path=`           | 语义相关笔记推荐                             |
 | GET       | `/api/related-resources?path=` | 与当前笔记相关的文献                         |
 | POST      | `/api/search`                  | 笔记 / 文献双模式语义搜索                    |
@@ -153,6 +154,8 @@ npm run build        :: 生成 dist/
 
 ## 常见问题
 
+- **笔记显示字数但正文空白**：说明该 Note 只有元数据、没有 `content`（早期"只同步 MetaData JSON"的入库方式留下的）。现有三重保障：① 打开笔记时后端自动从磁盘 md 载体回填；② `POST /api/notes/normalize-content` 批量规整；③ md-index 的 `sync`/`upsert_note` 已拒绝创建无正文节点（正文一律由 `ingest` 从 md 写入）。
+- **正文开头出现 `author:` / `date:`**：md 载体带 YAML frontmatter（docx2md `--meta` 产物）时，入库会**自动剥掉** frontmatter（这些信息已在节点元数据里，正文不再重复）；存量脏数据用 `POST /api/notes/normalize-content` 清理。
 - **点文献触发下载而非预览**：后端已配置 `Content-Disposition: inline`，正常应在页面内渲染；若提示"无本地 PDF"，说明该条目的 PDF 文件路径在当前机器上不存在（Zotero 附件存储在其他位置），需同步 PDF 或重映射 `dir` 路径。
 - **中文路径/参数**：md_path 一律走 query 参数传递，避免 URL path 中文与 `%2F` 解码歧义。
 - **Neo4j 离线**：桌面 `知识库.exe` 会自动启动 Neo4j；`kb.bat start` 仅检查 Neo4j（7687），未在线会提示先启动数据库。

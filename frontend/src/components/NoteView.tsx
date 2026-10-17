@@ -236,15 +236,12 @@ export default function NoteView() {
     }
   }, [editing, current?.md_path])
 
-  // 仅保存到 Neo4j，不退出编辑态（Ctrl+S 快捷保存）
-  const saveOnly = async () => {
-    await saveCurrent()
-  }
+  // 仅保存到 Neo4j，不退出编辑态（Ctrl+S 快捷保存）；返回是否保存成功
+  const saveOnly = async () => saveCurrent()
 
-  // 保存并退出编辑态（「保存」按钮）
+  // 保存并退出编辑态（「保存」按钮）；保存失败时留在编辑态，避免误以为已存上
   const handleSave = async () => {
-    await saveOnly()
-    setEditing(false)
+    if (await saveOnly()) setEditing(false)
   }
 
   // 剪贴板粘贴图片：上传到笔记 assets 目录，并在光标处插入 md 引用

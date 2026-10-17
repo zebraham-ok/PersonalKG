@@ -66,6 +66,8 @@ interface KbState {
   midTab: 'chat' | 'resource'
   pdfUrl: string | null
   currentResource: Resource | null
+  /** PDF 区域与中间笔记区域互换（PDF 居中显示，笔记落到左下） */
+  pdfCenter: boolean
   indexing: boolean
 
   // 动作
@@ -75,7 +77,7 @@ interface KbState {
   loadSubjectCounts: () => Promise<void>
   loadNote: (path: string) => Promise<void>
   closeTab: (path: string) => void
-  saveCurrent: () => Promise<void>
+  saveCurrent: () => Promise<boolean>
   createNote: (title: string, subject?: string | null) => Promise<void>
   deleteCurrent: () => Promise<void>
   deleteSubject: (name: string, withContent: boolean) => Promise<DeleteSubjectResult>
@@ -95,6 +97,7 @@ interface KbState {
   clearToast: () => void
   setMidTab: (t: 'chat' | 'resource') => void
   openResourcePdf: (zid: string) => Promise<void>
+  togglePdfCenter: () => void
   sendChat: (text: string, opts: SendChatOpts) => Promise<void>
   clearChat: () => void
 }
@@ -129,6 +132,7 @@ export const useStore = create<KbState>((set, get) => ({
   midTab: 'chat',
   pdfUrl: null,
   currentResource: null,
+  pdfCenter: localStorage.getItem('kb.pdfCenter') === '1',
   indexing: false,
 
   init: async () => {
@@ -212,11 +216,19 @@ export const useStore = create<KbState>((set, get) => ({
 
   saveCurrent: async () => {
     const { current } = get()
-    if (!current) return
-    await api.saveNote(current.md_path, current.content, current.title)
+    if (!current) return false
+    try {
+      // content 为 undefined 时不发该字段（后端视为“不改正文”）
+      await api.saveNote(current.md_path, current.content, current.title)
+    } catch (e) {
+      // 失败必须可见：早期后端要求 content 必填，缺正文的笔记保存会静默 422
+      get().showToast(`保存失败：${e instanceof Error ? e.message : String(e)}`)
+      return false
+    }
     get().showToast(`已保存（${current.md_path}）`)
     // 刷新全量笔记，使「近期编辑」视图按最新 indexed_at 重排
     await get().loadNotes()
+    return true
   },
 
   setCurrentContent: (content) => {
@@ -229,7 +241,12 @@ export const useStore = create<KbState>((set, get) => ({
     if (!current) return
     const trimmed = title.trim()
     if (!trimmed || trimmed === current.title) return
-    await api.saveNote(current.md_path, current.content, trimmed)
+    try {
+      await api.saveNote(current.md_path, current.content, trimmed)
+    } catch (e) {
+      get().showToast(`重命名失败：${e instanceof Error ? e.message : String(e)}`)
+      return
+    }
     set({ current: { ...current, title: trimmed } })
     set((s) => ({
       tabs: s.tabs.map((t) =>
@@ -389,7 +406,10 @@ export const useStore = create<KbState>((set, get) => ({
     set({ syncing: true })
     try {
       const r = await api.syncResources()
-      get().showToast(`同步完成：${r.output.slice(-120)}`)
+      // 优先显示脚本的「同步完成（增量）」摘要行（含 新增/向量重算/仅刷新元数据 计数），
+      // 便于一眼确认这次是增量同步而不是全库重算
+      const line = r.output.split('\n').find((l) => l.includes('同步完成')) ?? r.output.slice(-120)
+      get().showToast(line.trim())
       await get().loadResources()
     } finally {
       set({ syncing: false })
@@ -419,6 +439,14 @@ export const useStore = create<KbState>((set, get) => ({
     } catch (e) {
       get().showToast(`加载资源失败：${e instanceof Error ? e.message : String(e)}`)
     }
+  },
+
+  togglePdfCenter: () => {
+    set((s) => {
+      const next = !s.pdfCenter
+      localStorage.setItem('kb.pdfCenter', next ? '1' : '0')
+      return { pdfCenter: next, midTab: 'resource' }
+    })
   },
 
   sendChat: async (text, opts) => {

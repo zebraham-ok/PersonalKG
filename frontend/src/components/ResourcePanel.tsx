@@ -1,6 +1,8 @@
 import { useStore } from '../stores/useStore'
 import { api } from '../services/api'
-import type { RelatedResource, Resource } from '../types'
+import NoteView from './NoteView'
+import ResourcePreview from './ResourcePreview'
+import type { RelatedResource } from '../types'
 
 function ResourceItem({
   title,
@@ -42,51 +44,9 @@ function ResourceItem({
   )
 }
 
-function MetaLink({ label, href }: { label: string; href?: string }) {
-  if (!href || href === 'null' || href === 'undefined') return null
-  return (
-    <a
-      className="meta-link"
-      href={href}
-      target="_blank"
-      rel="noreferrer"
-      onClick={(e) => e.stopPropagation()}
-    >
-      {label}
-    </a>
-  )
-}
-
-function ResourceMeta({ res }: { res: Resource }) {
-  const doiUrl = res.doi
-    ? res.doi.startsWith('http')
-      ? res.doi
-      : `https://doi.org/${res.doi}`
-    : undefined
-  return (
-    <div className="resource-meta">
-      <div className="rm-title">{res.title}</div>
-      <div className="rm-line">
-        {res.authors?.length ? res.authors.join(', ') : '佚名'}
-        {res.date && ` · ${res.date}`}
-        {res.itype && ` · ${res.itype}`}
-      </div>
-      {res.ptitle && <div className="rm-line">{res.ptitle}</div>}
-      <div className="rm-links">
-        <MetaLink label="DOI" href={doiUrl} />
-        <MetaLink label="网页" href={res.url} />
-      </div>
-      {res.abstract && <div className="rm-abstract">{res.abstract}</div>}
-    </div>
-  )
-}
-
-function isResource(r: Resource | RelatedResource | null): r is Resource {
-  return r != null && 'zid' in r
-}
-
 export default function ResourcePanel() {
-  const { relatedResources, resources, currentResource, pdfUrl, openResourcePdf } = useStore()
+  const { relatedResources, resources, currentResource, pdfCenter, openResourcePdf } =
+    useStore()
   const activeZid = currentResource?.zid ?? null
 
   const openDir = async (zid: string | null | undefined) => {
@@ -105,7 +65,7 @@ export default function ResourcePanel() {
         {relatedResources.length > 0 && (
           <>
             <div className="section-title">与当前笔记相关</div>
-            {relatedResources.map((r) => (
+            {relatedResources.map((r: RelatedResource) => (
               <ResourceItem
                 key={`rel-${r.zotero_id ?? r.title}`}
                 title={r.title}
@@ -133,14 +93,8 @@ export default function ResourcePanel() {
           />
         ))}
       </div>
-      <div className="resource-pdf">
-        {pdfUrl ? (
-          <iframe title="pdf" src={pdfUrl} />
-        ) : currentResource && isResource(currentResource) ? (
-          <ResourceMeta res={currentResource} />
-        ) : (
-          <div className="no-pdf">← 选择一篇论文查看 PDF 或访问 DOI/网页</div>
-        )}
+      <div className={`resource-pdf ${pdfCenter ? 'holds-note' : ''}`}>
+        {pdfCenter ? <NoteView /> : <ResourcePreview />}
       </div>
     </div>
   )

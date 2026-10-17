@@ -6,10 +6,11 @@ import NoteView from './components/NoteView'
 import TabsBar from './components/TabsBar'
 import ChatPanel from './components/ChatPanel'
 import ResourcePanel from './components/ResourcePanel'
+import ResourcePreview from './components/ResourcePreview'
 import KnowledgeGraph from './components/KnowledgeGraph'
 
 export default function App() {
-  const { init, toast, midTab, setMidTab } = useStore()
+  const { init, toast, midTab, setMidTab, pdfCenter, togglePdfCenter } = useStore()
   const [leftW, setLeftW] = useState(() =>
     Number(localStorage.getItem('kb.leftW') ?? 300),
   )
@@ -98,6 +99,19 @@ export default function App() {
               >
                 相关论文 / PDF
               </button>
+              {midTab === 'resource' && (
+                <button
+                  className={`swap-btn ${pdfCenter ? 'active' : ''}`}
+                  title={
+                    pdfCenter
+                      ? '把 PDF 换回左栏下部、笔记换回中间'
+                      : '把 PDF 移到中间大区域显示，笔记落到左栏下部'
+                  }
+                  onClick={togglePdfCenter}
+                >
+                  {pdfCenter ? '还原' : '中心显示'}
+                </button>
+              )}
             </div>
             {midTab === 'chat' ? <ChatPanel /> : <ResourcePanel />}
           </div>
@@ -106,7 +120,14 @@ export default function App() {
 
         <main className="col-mid">
           <TabsBar />
-          <NoteView />
+          {/* 「中心显示」开启时：PDF 占中间大区域，笔记换到左栏下部（见 ResourcePanel） */}
+          {pdfCenter && midTab === 'resource' ? (
+            <div className="center-pdf">
+              <ResourcePreview />
+            </div>
+          ) : (
+            <NoteView />
+          )}
         </main>
 
         {!rightCollapsed && <div className="resize-handle" onMouseDown={startDrag('r')} />}

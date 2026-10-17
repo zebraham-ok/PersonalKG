@@ -80,7 +80,7 @@ export const api = {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content, title }),
-    }).then(j<{ ok: boolean; word_count: number }>),
+    }).then(j<{ ok: boolean; word_count: number | null }>),
 
   related: (path: string, limit = 10) =>
     fetch(`${API}/related?${qs({ path, limit })}`).then(j<RelatedNote[]>),
